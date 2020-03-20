@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Provides OTP functionality over lambda, using secrets stored in SSM parameterstore.
+
+
+Parameters:
+  AllowedIPs:
+    Type: CommaDelimitedList
+    Default: 0.0.0.0/0,192.168.100.25/32
+    Description: Allowed IP ranges in CIDR format. Separate with commas.
+  ServerlessOTPRoleName:
+    Type: String
+    Default: ServerlessOTPRole
+    Description: The name of the role used by the OTP Lambda function
+  AllowGetOTPRoleName:
+    Type: String
+    Default: AllowGetOTPRole
+    Description: The name of the role allowed to get OTP
+
+
+Globals:
+  Function:
+    Timeout: 15
+
+Resources:
+  ServerlessOTP:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: ServerlessOTP
+      Role: !GetAtt ServerlessOTPRole.Arn
+      CodeUri: build
+      Handler: main
+      Runtime: go1.x
+      MemorySize: 128
+      Tracing: Active
+      Environment:
+        Variables:
+          PARAM1: VALUE
+
+  ServerlessOTPRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref ServerlessOTPRoleName
+      Description: Restricted role to allow Lambda to read single parameters in SSM and create logs
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: OTPLambdaRolePolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - logs:GetLogRecord
+                - logs:DescribeLogGroups
+                - logs:DescribeLogStreams
+                - logs:PutDestinationPolicy
+                - logs:GetLogGroupFields
+                - logs:PutDestination
+                - logs:GetLogDelivery
+                - logs:PutLogEvents
+                - logs:DescribeDestinations
+                - logs:ListLogDeliveries
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                - kms:GetParametersForImport
+                - kms:GetPublicKey
+                - kms:GetKeyPolicy
+                - kms:DescribeKey
+                - ssm:GetParameter
+                Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*"
+                - !Sub "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
+
+  AllowGetOTPRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Allows execution of the OTP generation role
+      RoleName: !Ref AllowGetOTPRoleName
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+            Action:
+              - sts:AssumeRole
+            Condition:
+              Bool:
+                aws:MultiFactorAuthPresent: true
+              IpAddress:
+                aws:SourceIp:
+                  Ref: AllowedIPs
+      Policies:
+        - PolicyName: AllowGetOTPPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                - lambda:InvokeFunction
+                Resource:
+                - !GetAtt ServerlessOTP.Arn
