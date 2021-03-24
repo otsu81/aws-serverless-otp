@@ -41,7 +41,7 @@ Stored secrets must be Google Authenticator compliant string.
 
 Secrets must be manually added to SSM Parameter Store. [See the documentation for steps](https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-create.html). The OTP function will only have permissions to fetch parameters from the same region (i.e. if the function is deployed in Ireland the parameters must be stored in Ireland region).
 
-It is strongly recommended to store secrets as `SecureString`, this will ensure parameters are encrypted at rest and that IAM users without the permissions are able to decrypt the secrets. For now, the AWS provided KMS key is used.
+It is strongly recommended to store secrets as `SecureString`, this will ensure parameters are encrypted at rest and that IAM users without the permissions are unable to decrypt the secrets. For now, the AWS provided KMS key is used.
 
 
 # Usage
